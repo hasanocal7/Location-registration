@@ -1,68 +1,137 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--
+ @license
+ Copyright 2019 Google LLC. All Rights Reserved.
+ SPDX-License-Identifier: Apache-2.0
+-->
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
-    <title>Map Example</title>
+    <title>Add Map</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+    <style>
+      /* 
+ * Always set the map height explicitly to define the size of the div element
+ * that contains the map. 
+ */
+      #map {
+        height: 100%;
+      }
+
+      /* 
+   * Optional: Makes the sample page fill the window. 
+   */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
   </head>
   <body>
-    <div
-      class="container"
-      style="display: flex; justify-content: center; align-items: center"
+    <!-- Search input -->
+    <input
+      id="searchInput"
+      class="controls"
+      type="text"
+      placeholder="Enter a location"
+    />
+
+    <!-- Google map -->
+    <div id="map"></div>
+
+    <!-- Display geolocation data -->
+    <ul class="geo-data">
+      <li>Full Address: <span id="location"></span></li>
+      <li>Postal Code: <span id="postal_code"></span></li>
+      <li>Country: <span id="country"></span></li>
+      <li>Latitude: <span id="lat"></span></li>
+      <li>Longitude: <span id="lon"></span></li>
+    </ul>
     >
-      <div class="row">
-        <div id="map" style="width: 60vw; height: 60vh"></div>
-        <form action="/register" method="post">
-          <input id="LocationInput" type="text" name="location" />
-          <label for="LocationInput">LocationInput</label>
-          <button type="submit">Sign up</button>
-        </form>
-      </div>
-    </div>
-
-    <script>
-            var map = L.map("map").setView([36, 36], 5);
-            var marker = L.marker(<%- JSON.stringify(location) %>).addTo(map);
-            L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-              maxZoom: 19,
-            }).addTo(map);
-
-            const lInput = document.getElementById("LocationInput")
-            lInput.value= location
-
-
-      /*       function sendLocationToServer(latlng) {
-              fetch("/api/send-location", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ location: latlng }),
-              })
-                .then((response) => response.json())
-                .then((data) => console.log("Server response:", data))
-                .catch((error) => console.error("Error:", error));
-            } */
-
-            function onMapClick(e) {
-              marker.setLatLng(e.latlng).addTo(map);
-              console.log(e.latlng.toString());
-              lInput.value= e.latlng.toString()
-              sendLocationToServer(e.latlng);
-            }
-
-            map.on("click", onMapClick);
-    </script>
   </body>
+  <script>
+    function initMap() {
+      var map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: -33.8688, lng: 151.2195 },
+        zoom: 13,
+      });
+      var input = document.getElementById("searchInput");
+      map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+
+      var autocomplete = new google.maps.places.Autocomplete(input);
+      autocomplete.bindTo("bounds", map);
+
+      var infowindow = new google.maps.InfoWindow();
+      var marker = new google.maps.Marker({
+        map: map,
+        anchorPoint: new google.maps.Point(0, -29),
+      });
+
+      autocomplete.addListener("place_changed", function () {
+        infowindow.close();
+        marker.setVisible(false);
+        var place = autocomplete.getPlace();
+        if (!place.geometry) {
+          window.alert("Autocomplete's returned place contains no geometry");
+          return;
+        }
+
+        // If the place has a geometry, then present it on a map.
+        if (place.geometry.viewport) {
+          map.fitBounds(place.geometry.viewport);
+        } else {
+          map.setCenter(place.geometry.location);
+          map.setZoom(17);
+        }
+        marker.setIcon({
+          url: place.icon,
+          size: new google.maps.Size(71, 71),
+          origin: new google.maps.Point(0, 0),
+          anchor: new google.maps.Point(17, 34),
+          scaledSize: new google.maps.Size(35, 35),
+        });
+        marker.setPosition(place.geometry.location);
+        marker.setVisible(true);
+
+        var address = "";
+        if (place.address_components) {
+          address = [
+            (place.address_components[0] &&
+              place.address_components[0].short_name) ||
+              "",
+            (place.address_components[1] &&
+              place.address_components[1].short_name) ||
+              "",
+            (place.address_components[2] &&
+              place.address_components[2].short_name) ||
+              "",
+          ].join(" ");
+        }
+
+        infowindow.setContent(
+          "<div><strong>" + place.name + "</strong><br>" + address
+        );
+        infowindow.open(map, marker);
+
+        // Location details
+        for (var i = 0; i < place.address_components.length; i++) {
+          if (place.address_components[i].types[0] == "postal_code") {
+            document.getElementById("postal_code").innerHTML =
+              place.address_components[i].long_name;
+          }
+          if (place.address_components[i].types[0] == "country") {
+            document.getElementById("country").innerHTML =
+              place.address_components[i].long_name;
+          }
+        }
+        document.getElementById("location").innerHTML = place.formatted_address;
+        document.getElementById("lat").innerHTML =
+          place.geometry.location.lat();
+        document.getElementById("lon").innerHTML =
+          place.geometry.location.lng();
+      });
+    }
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=<%= locals.googleMapsApiKey %>&libraries=places&callback=initMap"></script>
 </html>
